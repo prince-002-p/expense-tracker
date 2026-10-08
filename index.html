@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FlowFund — Personal Finance & Expense Tracker</title>
+  <meta name="description" content="A modern personal finance and expense tracking web app for managing income, expenses, budgets, and financial insights." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <div class="picker-overlay hidden" id="picker-overlay" role="dialog" aria-modal="true" aria-labelledby="picker-heading">
+    <div class="picker-modal">
+      <button class="picker-close" id="picker-close" aria-label="Close dialog">✕</button>
+      <p class="picker-eyebrow">New Transaction</p>
+      <h2 class="picker-heading" id="picker-heading">What are you<br><em>recording?</em></h2>
+      <p class="picker-sub">Choose the type first — your categories update automatically.</p>
+      <div class="picker-options">
+        <button class="picker-card picker-income" type="button" onclick="pickType('income')">
+          <div class="picker-icon" aria-hidden="true">↑</div><strong>Income</strong><span>Salary · Freelance · Gift · More</span>
+        </button>
+        <button class="picker-card picker-expense" type="button" onclick="pickType('expense')">
+          <div class="picker-icon" aria-hidden="true">↓</div><strong>Expense</strong><span>Food · Travel · Shopping · More</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="picker-overlay hidden" id="budget-overlay" role="dialog" aria-modal="true" aria-labelledby="budget-heading">
+    <div class="picker-modal budget-modal">
+      <button class="picker-close" id="budget-close" aria-label="Close dialog" onclick="closeBudgetModal()">✕</button>
+      <p class="picker-eyebrow">Monthly Budget Planning</p>
+      <h2 class="picker-heading" id="budget-heading">Set Category<br><em>Spending Caps</em></h2>
+      <p class="picker-sub">Define maximum monthly budgets to receive alerts before overspending.</p>
+      <form id="budget-form" onsubmit="saveBudgets(event)">
+        <div class="budget-input-list" id="budget-input-list"></div>
+        <div class="budget-modal-actions">
+          <button type="button" class="del-cancel" onclick="closeBudgetModal()">Cancel</button>
+          <button type="submit" class="if-submit inc">Save Budget Caps →</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="del-overlay hidden" id="del-overlay" role="dialog" aria-modal="true" aria-labelledby="del-heading" aria-describedby="del-desc">
+    <div class="del-modal">
+      <div class="del-emoji" aria-hidden="true">🗑️</div>
+      <h4 id="del-heading">Delete this entry?</h4>
+      <p id="del-desc">This action can be undone immediately via toast notification.</p>
+      <div class="del-actions">
+        <button class="del-cancel" type="button" onclick="closeDel()">Keep it</button>
+        <button class="del-confirm" type="button" id="del-confirm-btn">Yes, delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="shell">
+    <aside class="sidebar" aria-label="Financial Summary & Actions">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">FF</div>
+        <div><h1 class="brand-name">FlowFund</h1><div class="brand-tag">Personal Finance</div></div>
+        <div class="currency-wrapper">
+          <select id="currency-select" class="currency-select" aria-label="Select Currency">
+            <option value="INR">₹ INR</option><option value="USD">$ USD</option><option value="EUR">€ EUR</option><option value="GBP">£ GBP</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="balance-hero">
+        <div class="hero-top"><p class="bal-label">Current Balance</p><span class="health-badge" id="health-badge" title="Savings Rate Indicator">--</span></div>
+        <h2 class="bal-amount" id="balance">₹0.00</h2>
+        <div class="bal-row">
+          <div class="bal-stat income-stat"><div class="stat-icon" aria-hidden="true">↑</div><div><div class="stat-lbl">Income</div><div class="stat-val" id="income">₹0.00</div></div></div>
+          <div class="bal-divider"></div>
+          <div class="bal-stat expense-stat"><div class="stat-icon" aria-hidden="true">↓</div><div><div class="stat-lbl">Expense</div><div class="stat-val" id="expense">₹0.00</div></div></div>
+        </div>
+      </div>
+
+      <button class="open-picker-btn" id="open-picker-btn" type="button" onclick="openPicker()"><span class="plus-icon" aria-hidden="true">+</span> Add Transaction</button>
+      <div id="form-container"></div>
+
+      <div class="mini-summary"><div class="ms-header"><p class="ms-label">Top Categories</p></div><div id="mini-cats"></div></div>
+    </aside>
+
+    <main class="content">
+      <header class="content-header">
+        <div><h2 class="page-title">Transaction History</h2><p class="page-sub" id="txn-count-label">0 entries</p></div>
+        <div class="header-actions">
+          <button class="export-btn" type="button" onclick="exportCSV()" title="Export transactions to CSV file">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV
+          </button>
+          <button class="clear-all-btn" type="button" onclick="clearAll()">Clear All</button>
+        </div>
+      </header>
+
+      <section class="analytics-card" id="analytics-card">
+        <div class="analytics-header">
+          <div class="analytics-title"><span class="analytics-icon" aria-hidden="true">📊</span><h3>Financial Insights & Budget Planning</h3></div>
+          <div class="analytics-header-actions"><button type="button" class="budget-btn" onclick="openBudgetModal()" title="Set category spending limits">🎯 Set Budgets</button><span class="insight-pill" id="smart-insight">Tracking active</span></div>
+        </div>
+        <div class="analytics-body">
+          <div class="chart-container">
+            <svg class="donut-chart" viewBox="0 0 36 36" id="donut-svg">
+              <circle class="donut-bg" cx="18" cy="18" r="15.915" fill="none" stroke="var(--border-soft)" stroke-width="3.8"></circle>
+              <g id="donut-segments"></g>
+            </svg>
+            <div class="donut-center"><span class="donut-center-lbl">Spent</span><span class="donut-center-val" id="donut-total">₹0</span></div>
+          </div>
+          <div class="category-bars" id="category-bars"><p class="empty-analytics-msg">Add transactions to generate category analytics.</p></div>
+        </div>
+      </section>
+
+      <div class="controls-bar">
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="search-input" class="search-input" placeholder="Search by description or category..." oninput="handleSearch()" aria-label="Search transactions" />
+          <button type="button" id="search-clear" class="search-clear hidden" onclick="clearSearch()" aria-label="Clear search">✕</button>
+        </div>
+        <div class="filter-sort-group">
+          <div class="filter-group" role="tablist" aria-label="Transaction Filter">
+            <button class="fpill active" type="button" role="tab" aria-selected="true" onclick="applyFilter('all', this)">All</button>
+            <button class="fpill" type="button" role="tab" aria-selected="false" onclick="applyFilter('income', this)">Income</button>
+            <button class="fpill" type="button" role="tab" aria-selected="false" onclick="applyFilter('expense', this)">Expense</button>
+          </div>
+          <div class="sort-wrapper">
+            <select id="sort-select" class="sort-select" onchange="handleSortChange()" aria-label="Sort transactions">
+              <option value="date-desc">Sort: Newest First</option><option value="date-asc">Sort: Oldest First</option><option value="amount-desc">Sort: Highest Amount</option><option value="amount-asc">Sort: Lowest Amount</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="txn-feed" id="txn-feed" role="feed" aria-busy="false"></div>
+      <div class="empty-state" id="empty-state"><div class="empty-art" aria-hidden="true">📊</div><h3 id="empty-title">Nothing recorded yet</h3><p id="empty-desc">Add your first income or expense to start building a clear picture of your finances.</p></div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-message">Deleted.</span><button class="toast-undo" id="toast-undo" type="button">Undo</button></div>
+</body>
+</html>
