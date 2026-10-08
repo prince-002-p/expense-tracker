@@ -207,7 +207,10 @@ function saveBudgets(e) {
 
 // ── INLINE FORM CONTROLLER ────────────────────────────────
 function buildForm(type, existingTxn = null) {
+  // Preserve editId while replacing an existing inline form.
+  const currentEditId = editId;
   removeForm();
+  editId = currentEditId;
   const formContainer = document.getElementById('form-container');
 
   const lastCat = localStorage.getItem('last_category_' + type);
@@ -286,47 +289,88 @@ function submitForm() {
   const dateInput = document.getElementById('if-date');
   const errEl     = document.getElementById('if-err');
 
-  errEl.textContent = '';
+  if (!descInput || !amtInput || !catInput || !dateInput) return;
+  if (errEl) errEl.textContent = '';
 
   const desc = descInput.value.trim();
-  const amt  = parseFloat(amtInput.value);
-  const cat  = catInput.value;
+  const amt = Number.parseFloat(amtInput.value);
+  const cat = catInput.value;
   const date = dateInput.value;
+  const type = chosenType || (editId !== null
+    ? transactions.find(t => t.id === editId)?.type
+    : null);
 
-  // Form Validation
-  if (!desc) { errEl.textContent = 'Description is required.'; descInput.focus(); return; }
-  if (isNaN(amt) || amt <= 0) { errEl.textContent = 'Enter a valid positive amount.'; amtInput.focus(); return; }
-  if (!date) { errEl.textContent = 'Please pick a valid date.'; dateInput.focus(); return; }
+  // Form validation
+  if (!desc) {
+    if (errEl) errEl.textContent = 'Description is required.';
+    descInput.focus();
+    return;
+  }
 
-  if (editId !== null) {
-    const index = transactions.findIndex(t => t.id === editId);
-    if (index !== -1) {
+  if (!Number.isFinite(amt) || amt <= 0) {
+    if (errEl) errEl.textContent = 'Enter a valid positive amount.';
+    amtInput.focus();
+    return;
+  }
+
+  if (!date) {
+    if (errEl) errEl.textContent = 'Please pick a valid date.';
+    dateInput.focus();
+    return;
+  }
+
+  if (!type || !CATEGORIES[type]) {
+    if (errEl) errEl.textContent = 'Please select Income or Expense first.';
+    return;
+  }
+
+  try {
+    if (editId !== null) {
+      const index = transactions.findIndex(t => t.id === editId);
+
+      if (index === -1) {
+        if (errEl) errEl.textContent = 'Transaction could not be found.';
+        return;
+      }
+
       transactions[index] = {
         ...transactions[index],
+        type,
         desc,
         amount: amt,
         category: cat,
         date
       };
-      showToast('✏️ Transaction updated!');
-    }
-  } else {
-    const newTxn = {
-      id: Date.now(),
-      type: chosenType,
-      desc,
-      amount: amt,
-      category: cat,
-      date
-    };
-    transactions.unshift(newTxn);
-    showToast(chosenType === 'income' ? '✅ Income recorded!' : '🔴 Expense recorded!');
-  }
 
-  localStorage.setItem('last_category_' + chosenType, cat);
-  saveStorage();
-  renderAll();
-  removeForm();
+      localStorage.setItem('last_category_' + type, cat);
+      saveStorage();
+      renderAll();
+      showToast('✏️ Transaction updated!');
+    } else {
+      const newTxn = {
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        type,
+        desc,
+        amount: amt,
+        category: cat,
+        date
+      };
+
+      transactions.unshift(newTxn);
+      localStorage.setItem('last_category_' + type, cat);
+      saveStorage();
+      renderAll();
+      showToast(type === 'income' ? '✅ Income recorded!' : '🔴 Expense recorded!');
+    }
+
+    removeForm();
+    chosenType = null;
+  } catch (error) {
+    console.error('FlowFund save error:', error);
+    if (errEl) {
+      errEl.textContent = 'Could not save this transaction. Please try again.';
+    }
+  }
 }
 
 // ── SEARCH, FILTER & SORT ─────────────────────────────────
