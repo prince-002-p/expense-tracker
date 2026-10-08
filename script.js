@@ -666,22 +666,28 @@ function exportCSV() {
     return;
   }
 
-  const headers = ['ID', 'Type', 'Description', 'Amount', 'Category', 'Date'];
+  const headers = ['ID', 'Type', 'Description', 'Amount', 'Category', 'Date', 'Currency'];
+  const csvEscape = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
   const rows = transactions.map(t => [
     t.id,
     t.type,
-    `"${t.desc.replace(/"/g, '""')}"`,
-    t.amount,
-    `"${t.category.replace(/"/g, '""')}"`,
-    t.date
+    csvEscape(t.desc),
+    Number(t.amount).toFixed(2),
+    csvEscape(t.category),
+    t.date,
+    selectedCurrency
   ]);
 
-  const csvContent = 'data:text/csv;charset=utf-8,' +
-    [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const csv = [
+    headers.map(csvEscape).join(','),
+    ...rows.map(r => r.join(','))
+  ].join('\\r\\n');
 
-  const encodedUri = encodeURI(csvContent);
+  const blob = new Blob(['\\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const encodedUrl = URL.createObjectURL(blob);
+
   const link = document.createElement('a');
-  link.setAttribute('href', encodedUri);
+  link.setAttribute('href', encodedUrl);
   link.setAttribute('download', `flowfund_export_${new Date().toISOString().split('T')[0]}.csv`);
   document.body.appendChild(link);
   link.click();
@@ -690,7 +696,6 @@ function exportCSV() {
 
   showToast('📥 CSV exported successfully');
 }
-
 function clearAll() {
   if (transactions.length === 0) { showToast('Nothing to clear!'); return; }
   if (!confirm('Clear ALL transactions? This action cannot be undone.')) return;
