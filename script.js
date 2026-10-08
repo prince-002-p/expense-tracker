@@ -62,11 +62,19 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function loadStorage() {
-  const rawTxns = localStorage.getItem('flowfund_v2');
-  transactions = rawTxns ? JSON.parse(rawTxns) : [];
+  try {
+    const rawTxns = localStorage.getItem('flowfund_v2');
+    const parsedTxns = rawTxns ? JSON.parse(rawTxns) : [];
+    transactions = Array.isArray(parsedTxns) ? parsedTxns : [];
 
-  const rawBudgets = localStorage.getItem('flowfund_budgets');
-  budgets = rawBudgets ? JSON.parse(rawBudgets) : {};
+    const rawBudgets = localStorage.getItem('flowfund_budgets');
+    const parsedBudgets = rawBudgets ? JSON.parse(rawBudgets) : {};
+    budgets = parsedBudgets && typeof parsedBudgets === 'object' ? parsedBudgets : {};
+  } catch (error) {
+    console.warn('FlowFund storage could not be parsed. Starting with a clean state.', error);
+    transactions = [];
+    budgets = {};
+  }
 
   const rawCurr = localStorage.getItem('flowfund_currency');
   if (rawCurr && CURRENCIES[rawCurr]) {
@@ -104,8 +112,24 @@ function initEventListeners() {
     renderAll();
   });
 
-  // Keyboard Shortcuts (Escape Key to close modals)
+  // Keyboard Shortcuts
   document.addEventListener('keydown', e => {
+    const tag = document.activeElement?.tagName;
+    const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+      return;
+    }
+
+    if (!typing && e.key.toLowerCase() === 'n') {
+      e.preventDefault();
+      openPicker();
+      return;
+    }
+
     if (e.key === 'Escape') {
       if (!pickerOverlay.classList.contains('hidden')) closePicker();
       if (!budgetOverlay.classList.contains('hidden')) closeBudgetModal();
@@ -356,7 +380,7 @@ function renderSummary() {
   });
 
   const netBalance = inc - exp;
-  document.getElementById('balance').textContent = fmt(netBalance);
+  document.getElementById('balance').textContent = fmtSigned(netBalance);
   document.getElementById('income').textContent  = fmt(inc);
   document.getElementById('expense').textContent = fmt(exp);
 
@@ -517,8 +541,8 @@ function undoDelete() {
   saveStorage();
   renderAll();
 
-  const undoBtn = document.getElementById('toast-undo-btn');
-  undoBtn.classList.add('hidden');
+  const undoBtn = document.getElementById('toast-undo');
+  if (undoBtn) undoBtn.classList.add('hidden');
   showToast('↩️ Restored transaction');
 }
 
@@ -529,15 +553,16 @@ function renderAnalytics() {
   const categoryBars  = document.getElementById('category-bars');
   const smartInsight  = document.getElementById('smart-insight');
 
-  const expenses = transactions.filter(t => t.type === 'expense');
+  const currentMonth = getCurrentMonthKey();
+  const expenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(currentMonth));
   const totalExp = expenses.reduce((sum, t) => sum + t.amount, 0);
 
   donutTotal.textContent = fmtShort(totalExp);
 
   if (totalExp === 0) {
     donutSegments.innerHTML = '';
-    categoryBars.innerHTML = '<p class="empty-analytics-msg">Log expenses to generate category insights.</p>';
-    smartInsight.textContent = 'No expense data';
+    categoryBars.innerHTML = '<p class="empty-analytics-msg">No expenses recorded this month yet.</p>';
+    smartInsight.textContent = 'This month: no expenses';
     return;
   }
 
@@ -661,8 +686,9 @@ function exportCSV() {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(encodedUrl);
 
-  showToast('📥 Transactions exported to CSV');
+  showToast('📥 CSV exported successfully');
 }
 
 function clearAll() {
@@ -678,16 +704,14 @@ function clearAll() {
 // ── TOAST NOTIFICATION CONTROL ───────────────────────────
 function showToast(msg, showUndo = false) {
   const toastEl = document.getElementById('toast');
-  const toastText = document.getElementById('toast-text');
-  const toastUndoBtn = document.getElementById('toast-undo-btn');
+  const toastText = document.getElementById('toast-message');
+  const toastUndoBtn = document.getElementById('toast-undo');
+
+  if (!toastText || !toastUndoBtn) return;
 
   toastText.textContent = msg;
-
-  if (showUndo) {
-    toastUndoBtn.classList.remove('hidden');
-  } else {
-    toastUndoBtn.classList.add('hidden');
-  }
+  toastUndoBtn.classList.toggle('hidden', !showUndo);
+  toastUndoBtn.onclick = showUndo ? undoDelete : null;
 
   toastEl.classList.add('show');
   clearTimeout(undoTimer);
@@ -701,10 +725,22 @@ function showToast(msg, showUndo = false) {
 // ── UTILITIES ────────────────────────────────────────────
 function fmt(n) {
   const curr = CURRENCIES[selectedCurrency] || CURRENCIES.INR;
-  return curr.symbol + Math.abs(n).toLocaleString(curr.locale, {
+  return curr.symbol + Math.abs(Number(n) || 0).toLocaleString(curr.locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
+}
+
+function fmtSigned(n) {
+  const value = Number(n) || 0;
+  if (value < 0) return '−' + fmt(Math.abs(value));
+  if (value > 0) return '+' + fmt(value);
+  return fmt(0);
+}
+
+function getCurrentMonthKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function fmtShort(n) {
